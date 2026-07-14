@@ -8,9 +8,22 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 
-// Configure EF Core with SQL Server
+// Configure EF Core depending on environment and connection string
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    if (builder.Environment.IsDevelopment() || 
+        (connectionString != null && (connectionString.Contains("Server=") || connectionString.Contains("Database=")) && !connectionString.Contains("Server=BU")))
+    {
+        options.UseSqlServer(connectionString);
+    }
+    else
+    {
+        // Fallback for production (Render) or when SQL Server is not available
+        options.UseSqlite("Data Source=pescaderia.db");
+    }
+});
 
 // Configure CORS
 builder.Services.AddCors(options =>
