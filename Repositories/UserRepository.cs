@@ -1,106 +1,58 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using PescaderiaApi.Data;
 using PescaderiaApi.Interfaces;
 using PescaderiaApi.Models;
 
 namespace PescaderiaApi.Repositories
 {
     /// <summary>
-    /// Repositorio de usuarios en memoria.
-    /// Almacena usuarios en listas estáticas del Heap.
+    /// Repositorio de usuarios conectado a la base de datos SQL Server.
     /// </summary>
     public class UserRepository : IUserRepository
     {
-        private static readonly List<User> _users = new();
-        private static readonly object _lock = new();
+        private readonly AppDbContext _context;
 
-        static UserRepository()
+        public UserRepository(AppDbContext context)
         {
-            // Seed de usuarios
-            _users.Add(new User
-            {
-                Id = "1",
-                Email = "maria@example.com",
-                PasswordHash = "password123",
-                Name = "María González",
-                Role = "customer",
-                Phone = "555-1234",
-                Address = "Calle Principal 123, Ciudad"
-            });
-
-            _users.Add(new User
-            {
-                Id = "2",
-                Email = "juan@example.com",
-                PasswordHash = "password123",
-                Name = "Juan Pérez",
-                Role = "customer",
-                Phone = "555-5678",
-                Address = "Calle Principal 123, Ciudad"
-            });
-
-            _users.Add(new User
-            {
-                Id = "3",
-                Email = "Pescadria.fernando@gmail.com",
-                PasswordHash = "202609",
-                Name = "Fernando Azcorra",
-                Role = "admin",
-                Phone = "(999) 505-4210",
-                Address = "Calle Pescadores 456, Progreso, Yucatán"
-            });
+            _context = context;
         }
 
-        public Task<User?> GetByIdAsync(string id)
+        public async Task<User?> GetByIdAsync(string id)
         {
-            lock (_lock)
+            return await _context.Users.FindAsync(id);
+        }
+
+        public async Task<User?> GetByEmailAsync(string email)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u => u.Email.Equals(email));
+        }
+
+        public async Task AddAsync(User user)
+        {
+            if (string.IsNullOrEmpty(user.Id))
             {
-                var user = _users.FirstOrDefault(u => u.Id == id);
-                return Task.FromResult(user);
+                user.Id = Guid.NewGuid().ToString();
             }
+            await _context.Users.AddAsync(user);
+            await _context.SaveChangesAsync();
         }
 
-        public Task<User?> GetByEmailAsync(string email)
+        public async Task UpdateAsync(User user)
         {
-            lock (_lock)
+            var existing = await _context.Users.FindAsync(user.Id);
+            if (existing != null)
             {
-                var user = _users.FirstOrDefault(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
-                return Task.FromResult(user);
-            }
-        }
-
-        public Task AddAsync(User user)
-        {
-            lock (_lock)
-            {
-                if (string.IsNullOrEmpty(user.Id))
+                existing.Name = user.Name;
+                existing.Phone = user.Phone;
+                existing.Address = user.Address;
+                existing.Email = user.Email;
+                if (!string.IsNullOrEmpty(user.PasswordHash))
                 {
-                    user.Id = Guid.NewGuid().ToString();
+                    existing.PasswordHash = user.PasswordHash;
                 }
-                _users.Add(user);
-                return Task.CompletedTask;
-            }
-        }
-
-        public Task UpdateAsync(User user)
-        {
-            lock (_lock)
-            {
-                var existing = _users.FirstOrDefault(u => u.Id == user.Id);
-                if (existing != null)
-                {
-                    existing.Name = user.Name;
-                    existing.Phone = user.Phone;
-                    existing.Address = user.Address;
-                    existing.Email = user.Email;
-                    if (!string.IsNullOrEmpty(user.PasswordHash))
-                    {
-                        existing.PasswordHash = user.PasswordHash;
-                    }
-                }
-                return Task.CompletedTask;
+                await _context.SaveChangesAsync();
             }
         }
     }
